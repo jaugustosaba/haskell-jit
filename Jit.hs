@@ -1,11 +1,12 @@
-module Jit (run, compile) where
-
+{-# LANGUAGE ForeignFunctionInterface #-}
+module Jit (runJit) where
 
 import qualified Parser
-import Data.Binary
+import GHC.Word
 import Data.Bits
 import qualified Data.ByteString as BS
-
+import System.IO.Unsafe
+import Foreign.C
 
 data Instr =
     Push Integer
@@ -22,8 +23,14 @@ asStackCode expr = compile [] expr
     compile ins (Parser.Mul e1 e2) = Mul : (compile (compile ins e1) e2)
 
 
-run :: Parser.Expr -> Integer
-run = undefined
+foreign import ccall "runJit" c_runJit :: CString -> CSize -> IO CInt
+
+runJit :: Parser.Expr -> Integer
+runJit expr = toInteger $ unsafePerformIO $ BS.useAsCString code runJit
+  where
+    code = compile expr
+    csize = fromIntegral $ BS.length code
+    runJit cstr = c_runJit cstr csize
 
 
 littleEndian :: Word64 -> [Word8]
@@ -33,8 +40,15 @@ littleEndian n = map getByte [0 .. 7]
 
 
 compile :: Parser.Expr -> BS.ByteString
-compile = BS.pack . concat . reverse . map compile' . asStackCode
+compile expr = BS.pack $ concat [ prologue, code, epilogue ]
   where
+    code = concat $ reverse $ map compile' $ asStackCode expr
+    -- push %rbp
+    -- mov %rsp, %rbp
+    prologue = [0x55, 0x48, 0x89, 0xE5]
+    -- pop %rbp
+    -- retq $0x0
+    epilogue = [0x58, 0x5D, 0xC2, 0x00, 0x00]
     -- movabs $0x..., %rax
     -- push %rax
     compile' (Push n) =
@@ -45,5 +59,5 @@ compile = BS.pack . concat . reverse . map compile' . asStackCode
     -- pop %rax
     -- imul (%rsp), %rax
     -- mov %rax, (%rsp)
-    compile' Mul = [0x58, 0x48, 0x0F, 0x04, 0x24, 0x48, 0x89, 0x04, 0x24]
+    compile' Mul = [0x58, 0x48, 0x0F, 0xAF, 0x04, 0x24, 0x48, 0x89, 0x04, 0x24]
 

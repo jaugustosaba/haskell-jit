@@ -11,3 +11,4 @@ main = do
   let expr = parse tokens
   let res = eval expr
   printf "result: %d\n" res
+  printf "jit result: %d\n" $ runJit expr

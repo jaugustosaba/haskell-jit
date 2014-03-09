@@ -6,10 +6,11 @@ build-type: Simple
 cabal-version: >=1.8
 
 executable calc
-  build-depends:  base ==4.6.*,
-                  array ==0.4.*,
-                  bytestring ==0.10.*,
-                  binary ==0.5.*
+  build-depends:  base,
+                  array,
+                  bytestring
+  c-sources:      mmap-x86_64.c
+  cc-options:     -g
   other-modules:  Lexer, Parser, Interpreter, Jit
   build-tools:    alex, happy
   main-is:        Main.hs
